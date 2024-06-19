@@ -141,9 +141,10 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
+  const isProduction = process.env.NODE_ENV === 'production';
   const options = {
     httpOnly: true,
-    secure: true,
+    secure: isProduction,
   };
 
   return res
@@ -206,3 +207,5 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 export { registerUser, loginUser, logoutUser, refreshAccessToken };
+
+
