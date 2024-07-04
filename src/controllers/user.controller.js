@@ -6,6 +6,8 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
+import { v2 as cloudinary } from "cloudinary";
+
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -219,7 +221,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   }
 
   user.password = newPassword;
-  await user.save({ validateBeforeSave: true });
+  await user.save({ validateBeforeSave: false });
 
   return res
     .status(200)
@@ -234,7 +236,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findByIdAndUpdate(
-    user?._id,
+    req.user?._id,
     {
       $set: {
         fullName,
@@ -254,22 +256,24 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 });
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
-  const avatarLocalpath = req.files?.path;
+  const avatarLocalpath = req.file?.path;
 
   if (!avatarLocalpath) {
-    throw new ApiError(400, "Avatar is required");
+    throw new ApiError(400, "coverImage is required");
   }
+
   const user = await User.findById(req.user?._id);
 
-  let newAvatar;
-  try {
-    newAvatar = await uploadOnCloudinary(avatarFile.path);
-  } catch (error) {
-    throw new ApiError(400, "Error while uploading avatar to Cloudinary");
+  if (!user) {
+    throw new ApiError(404, "User not found");
   }
 
+  console.log("newAvatar", avatarLocalpath);
+
+  const newAvatar = await uploadOnCloudinary(avatarLocalpath);
+
   if (!newAvatar) {
-    throw new ApiError(400, "Error while uploading avatar to Cloudinary");
+    throw new ApiError(400, "Error while uploading cover image to cloudinary");
   }
 
   if (user.avatar) {
@@ -278,9 +282,12 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
       const publicIdWithExtension = avatarUrlParts[avatarUrlParts.length - 1];
       const publicId = publicIdWithExtension.split(".")[0];
 
-      await cloudinary.v2.uploader.destroy(publicId);
+      await cloudinary.uploader.destroy(publicId);
     } catch (error) {
-      console.error("Error deleting previous avatar from Cloudinary:", error);
+      console.error(
+        "Error deleting previous cover image from Cloudinary:",
+        error
+      );
     }
   }
 
@@ -298,14 +305,14 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, {}, "Successfully updated the avatar"));
+    .json(new ApiResponse(200, {}, "Successfully updated the Avatar"));
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
-  const coverImageLocalpath = req.files?.path;
+  const coverImageLocalpath = req.file?.path;
 
   if (!coverImageLocalpath) {
-    throw new ApiError(400, "Avatar is required");
+    throw new ApiError(400, "coverImage is required");
   }
 
   const user = await User.findById(req.user?._id);
@@ -313,6 +320,9 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(404, "User not found");
   }
+
+  console.log("newCoverImage", coverImageLocalpath);
+
   const newCoverImage = await uploadOnCloudinary(coverImageLocalpath);
 
   if (!newCoverImage) {
@@ -326,7 +336,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         coverImageUrlParts[coverImageUrlParts.length - 1];
       const publicId = publicIdWithExtension.split(".")[0];
 
-      await cloudinary.v2.uploader.destroy(publicId);
+      await cloudinary.uploader.destroy(publicId);
     } catch (error) {
       console.error(
         "Error deleting previous cover image from Cloudinary:",
@@ -353,7 +363,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 });
 
 const getUserChannelProfile = asyncHandler(async (req, res) => {
-  const { username } = req.params?.trime();
+  const { username } = req.params;
 
   if (!username) {
     throw new ApiError(400, "Username is missing");
@@ -362,7 +372,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
   const channel = await User.aggregate([
     {
       $match: {
-        username: username?.toLowercase(),
+        username: username?.trim().toLowerCase(),
       },
     },
     {
@@ -391,7 +401,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         },
         isSubscribed: {
           $cond: {
-            if: { $in: [req.user?._id, , "$subscribers.subscriber"] },
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
             then: true,
             else: false,
           },
@@ -422,10 +432,11 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 });
 
 const getWatchHistory = asyncHandler(async (req, res) => {
+
   const user = await User.aggregate([
     {
       $match: {
-        _id: new mongoose.Types.ObjectId(req.user._id),
+        _id: new mongoose.Types.ObjectId(req.user?._id),
       },
     },
     {
@@ -465,10 +476,14 @@ const getWatchHistory = asyncHandler(async (req, res) => {
   ]);
 
   return res
-  .status(200)
-  .json(
-    new ApiResponse(200, user[0]?.watchHistory, "User watch history retrieved")
-  )
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0]?.watchHistory,
+        "User watch history retrieved"
+      )
+    );
 });
 
 export {
