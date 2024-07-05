@@ -137,7 +137,9 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
-      refreshToken: undefined,
+      $unset: {
+        refreshToken: 1,
+      },
     },
     {
       new: true,
@@ -432,7 +434,6 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 });
 
 const getWatchHistory = asyncHandler(async (req, res) => {
-
   const user = await User.aggregate([
     {
       $match: {
