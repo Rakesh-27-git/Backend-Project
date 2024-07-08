@@ -270,8 +270,6 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  console.log("newAvatar", avatarLocalpath);
-
   const newAvatar = await uploadOnCloudinary(avatarLocalpath);
 
   if (!newAvatar) {
