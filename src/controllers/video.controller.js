@@ -8,9 +8,56 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
 import { v2 as cloudinary } from "cloudinary";
 
+const generateCloudinaryPublicId = (url) => {
+  const urlParts = url.split("/");
+  return urlParts[urlParts.length - 1].split(".")[0];
+};
+
 const getAllVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
-  //TODO: get all videos based on query, sort, pagination
+  const {
+    page = 1,
+    limit = 10,
+    query,
+    sortBy = "createdAt",
+    sortType = "desc",
+    userId,
+  } = req.query;
+
+  const filter = {};
+
+  if (userId) {
+    if (!isValidObjectId(userId)) {
+      throw new ApiError(400, "Invalid user id");
+    }
+
+    filter.owner = userId;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    if (query) {
+      filter.$or = [
+        { title: new RegExp(query, "i") },
+        { description: new RegExp(query, "i") },
+      ];
+    }
+
+    const sortOptions = {
+      [sortBy]: sortType === "desc" ? -1 : 1,
+    };
+
+    const videos = await Video.find(filter)
+      .populate("owner", "username")
+      .sort(sortOptions)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, `Videos retrieved successfully`, videos));
+  }
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
@@ -104,9 +151,7 @@ const updateVideo = asyncHandler(async (req, res) => {
 
   if (video.videoFile) {
     try {
-      const videoFileUrlParts = video.videoFile.split("/");
-      const videoFilePublicId =
-        videoFileUrlParts[videoFileUrlParts.length - 1].split(".")[0];
+      const videoFilePublicId = generateCloudinaryPublicId(video.videoFile);
       await cloudinary.uploader.destroy(videoFilePublicId);
     } catch (error) {
       console.log("Error deleting video file from cloudinary", error);
@@ -115,9 +160,7 @@ const updateVideo = asyncHandler(async (req, res) => {
 
   if (video.thumbnail) {
     try {
-      const thumbnailUrlParts = video.thumbnail.split("/");
-      const thumbnailPublicId =
-        thumbnailUrlParts[thumbnailUrlParts.length - 1].split(".")[0];
+      const thumbnailPublicId = generateCloudinaryPublicId(video.thumbnail);
       await cloudinary.uploader.destroy(thumbnailPublicId);
     } catch (error) {
       console.log("Error deleting thumbnail from cloudinary", error);
@@ -149,10 +192,65 @@ const deleteVideo = asyncHandler(async (req, res) => {
   if (!isValidObjectId(videoId)) {
     throw new ApiError(400, "Invalid video id");
   }
+
+  const video = await Video.findById(videoId);
+
+  if (!video) {
+    throw new ApiError(404, "Video not found");
+  }
+
+  if (video.videoFile) {
+    try {
+      const videoFilePublicId = generateCloudinaryPublicId(video.videoFile);
+      await cloudinary.uploader.destroy(videoFilePublicId);
+    } catch (error) {
+      console.log("Error deleting video file from cloudinary", error);
+    }
+  }
+
+  if (video.thumbnail) {
+    try {
+      const thumbnailPublicId = generateCloudinaryPublicId(video.thumbnail);
+      await cloudinary.uploader.destroy(thumbnailPublicId);
+    } catch (error) {
+      console.log("Error deleting thumbnail from cloudinary", error);
+    }
+  }
+
+  await Video.findByIdAndDelete(videoId);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Video deleted successfully", null));
 });
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
+
+  if (!isValidObjectId(videoId)) {
+    throw new ApiError(400, "Invalid video id");
+  }
+
+  const video = await Video.findById(videoId);
+
+  if (!video) {
+    throw new ApiError(404, "Video not found");
+  }
+
+  const updatedVideo = await Video.findByIdAndUpdate(
+    videoId,
+    { $set: { isPublished: !video.isPublished } },
+    { new: true }
+  );
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        `Video ${updatedVideo.isPublished ? "published" : "unpublished"}`
+      )
+    );
 });
 
 export {
