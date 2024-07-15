@@ -149,15 +149,6 @@ const updateVideo = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Video not found");
   }
 
-  if (video.videoFile) {
-    try {
-      const videoFilePublicId = generateCloudinaryPublicId(video.videoFile);
-      await cloudinary.uploader.destroy(videoFilePublicId);
-    } catch (error) {
-      console.log("Error deleting video file from cloudinary", error);
-    }
-  }
-
   if (video.thumbnail) {
     try {
       const thumbnailPublicId = generateCloudinaryPublicId(video.thumbnail);
@@ -199,12 +190,18 @@ const deleteVideo = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Video not found");
   }
 
+  if(req?.user.id !== video.owner.toString()) {
+    throw new ApiError(403, "You are not authorized to delete this video");
+  }
+
   if (video.videoFile) {
     try {
       const videoFilePublicId = generateCloudinaryPublicId(video.videoFile);
-      await cloudinary.uploader.destroy(videoFilePublicId);
+      await cloudinary.uploader.destroy(videoFilePublicId, {
+        resource_type: "video",
+      });
     } catch (error) {
-      console.log("Error deleting video file from cloudinary", error);
+      console.log("Error deleting video file from Cloudinary", error);
     }
   }
 
@@ -213,7 +210,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
       const thumbnailPublicId = generateCloudinaryPublicId(video.thumbnail);
       await cloudinary.uploader.destroy(thumbnailPublicId);
     } catch (error) {
-      console.log("Error deleting thumbnail from cloudinary", error);
+      console.log("Error deleting thumbnail from Cloudinary", error);
     }
   }
 
