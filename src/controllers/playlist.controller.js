@@ -67,6 +67,13 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Playlist not found");
   }
 
+  // Check if the video is already in the playlist
+  if (playlist.videos.includes(videoId)) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, "Video is already present in the playlist", playlist));
+  }
+
   playlist.videos.push(videoId);
   await playlist.save();
 
